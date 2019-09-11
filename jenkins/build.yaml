@@ -1,0 +1,49 @@
+metadata:
+    schema_type: "appconfig"
+package:
+    application_type: "java"
+    name: "maven"
+    description: "This repository contains the code which the Java app is comprised of."
+    uri: "http://bitbucket.vodacom.co.za/scm/vcdc/cicd-templates.git"
+    version: "0.0.1"
+    owner: "Darren Albertyn"
+    email: "darren@kineticskunk.com"
+jenkins_pipeline:
+    src_dir: src
+    configure_environment:
+        - "mvn -s /var/lib/jenkins/.m2/infinity-maven-settings.xml clean -U"
+    unit_testing:
+        - "mvn -s /var/lib/jenkins/.m2/infinity-maven-settings.xml test -e"
+    code_coverage:
+        - "mvn -s /var/lib/jenkins/.m2/infinity-maven-settings.xml package -e"
+        - "mvn -s /var/lib/jenkins/.m2/infinity-maven-settings.xml deploy -e"
+    static_analysis:
+        - "pwd"
+        - "ls -lah"
+        - "ls -lah target"
+        - "sonar-scanner -Dproject.settings=jenkins/sonar_project.properties"
+    deployment_stage:
+        - "echo ${TC_CLUSTER_NAME}"
+        - "kubectl config view"
+        - "echo 'Setting TC & FS cluster...'"
+        - "kubectl config set-cluster ${TC_CLUSTER_NAME} --server=${TC_SERVER_NAME} --insecure-skip-tls-verify=true"
+        - "kubectl config set-cluster ${FS_CLUSTER_NAME} --server=${FS_SERVER_NAME} --insecure-skip-tls-verify=true"
+        - "echo 'Setting Up Users For TC && FS  cluster..... '"
+        - "kubectl config set-credentials ${TC_USERNAME} --token=${TC_CLUSTER_TOKEN}"
+        - "kubectl config set-credentials ${FS_USERNAME} --token=${FS_CLUSTER_TOKEN}"
+        - "echo 'Setting contexts For TC & FS Cluster'"
+        - "kubectl config set-context deployer@${TC_CLUSTER_NAME} --cluster=${TC_CLUSTER_NAME} --namespace=${TILLER_NAMESPACE} --user=${TC_USERNAME}"
+        - "kubectl config set-context deployer@${FS_CLUSTER_NAME} --cluster=${FS_CLUSTER_NAME} --namespace=${TILLER_NAMESPACE} --user=${FS_USERNAME}"
+        - "export TILLER_NAMESPACE=infinity-devops-dev"
+        - "export NEXUS_URL=https://nexus3-infinity-devops-prod.app.prod.fs.ocp.vodacom.corp/"
+        - "chmod a+x charts/infinity_java/build.sh"
+        - "charts/infinity_java/build.sh"
+        - "helm install charts/infinity_java"
+
+      # - "pipenv run py.test --html=junit-results.html --junitxml=junit-results.xml --json=report.json --jsonapi --cov-config jenkins/smart_routing/.coveragerc --cov=smart_routing tests/ --cov-report xml"
+#    static_analysis:
+#        - "sonar-scanner -Dproject.settings=jenkins/smart_routing/sonar_project.properties"
+#    build_package:
+#        - "pip wheel -w dist/ . --trusted-host cicd-insecure-nexus-continuousintegration-prod.app.prod.tc.ocp.vodacom.corp"
+#    deploy_package:
+#        - "twine upload --config-file ${PYPIRC_SETTINGS} -r nexus dist/*"
